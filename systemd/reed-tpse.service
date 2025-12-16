@@ -1,0 +1,13 @@
+[Unit]
+Description=Tryx Panorama SE AIO Display Controller for Linux Distros
+Documentation=https://github.com/fadli0029/reed-tpse
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/reed-tpse daemon start --foreground
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
