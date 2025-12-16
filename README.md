@@ -1,8 +1,8 @@
 # reed-tpse
 
-Linux CLI for controlling the Tryx Panorama SE AIO cooler display.
+Linux CLI for Tryx Panorama SE AIO cooler display, reverse-engineered protocol, not affiliated with Tryx.
 
-Protocol reverse-engineered from KANALI Windows software and Android APKs.
+![demo](assets/demo.gif)
 
 ## Currently supported features
 
