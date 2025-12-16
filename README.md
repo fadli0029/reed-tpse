@@ -2,7 +2,7 @@
 
 Linux CLI for Tryx Panorama SE AIO cooler display, reverse-engineered protocol, not affiliated with Tryx.
 
-![demo](assets/demo.gif)
+https://github.com/user-attachments/assets/1bc87fa9-cde9-4fd5-ab35-a1a15152c467
 
 ## Currently supported features
 
