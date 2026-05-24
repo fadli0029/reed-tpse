@@ -33,7 +33,28 @@ target_compile_options(reed-tpse PRIVATE
     $<$<CONFIG:Debug>:-g -O0>
 )
 
+find_package(Qt6 COMPONENTS Widgets QUIET)
+if(Qt6_FOUND)
+    add_executable(reed-tpse-gui gui/main.cpp)
+    target_link_libraries(reed-tpse-gui PRIVATE reed Qt6::Widgets)
+    target_compile_options(reed-tpse-gui PRIVATE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Release>:-O2>
+        $<$<CONFIG:Debug>:-g -O0>
+    )
+endif()
+
 install(TARGETS reed-tpse RUNTIME DESTINATION bin)
+if(Qt6_FOUND)
+    install(TARGETS reed-tpse-gui RUNTIME DESTINATION bin)
+    install(FILES packaging/reed-tpse-gui.desktop
+        DESTINATION share/applications
+    )
+    install(FILES packaging/reed-tpse.png
+        DESTINATION share/icons/hicolor/256x256/apps
+        RENAME reed-tpse.png
+    )
+endif()
 install(TARGETS reed
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib

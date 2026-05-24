@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "panel.hpp"
+
 namespace reed {
 
 struct Config {
@@ -14,10 +16,12 @@ struct Config {
 
 struct DisplayState {
   std::vector<std::string> media;
-  std::string ratio = "2:1";
+  std::string ratio = panel::kDeviceJsonRatio;
   std::string screen_mode = "Full Screen";
   std::string play_mode = "Single";
   int brightness = 75;  // default lower than max setting to reduce burn-in risk on the display
+  /** Hex RGB underlay for composed transparent GIFs/images, e.g. #1a1a2e */
+  std::string compose_bg_color = "#000000";
 };
 
 class ConfigManager {

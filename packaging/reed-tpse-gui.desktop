@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tryx Panorama
+Comment=Linux GUI for Tryx Panorama SE display
+Exec=reed-tpse-gui
+Icon=reed-tpse
+Terminal=false
+Categories=Utility;System;
+Keywords=reed;tpse;tryx;cooler;display;
+StartupNotify=true

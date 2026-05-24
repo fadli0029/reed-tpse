@@ -163,6 +163,8 @@ std::optional<DisplayState> ConfigManager::load_state() {
   state.screen_mode = get_string(json, "screen_mode", state.screen_mode);
   state.play_mode = get_string(json, "play_mode", state.play_mode);
   state.brightness = get_int(json, "brightness", state.brightness);
+  state.compose_bg_color =
+      get_string(json, "compose_bg_color", state.compose_bg_color);
 
   return state;
 }
@@ -188,6 +190,7 @@ bool ConfigManager::save_state(const DisplayState& state) {
   obj["screen_mode"] = picojson::value(state.screen_mode);
   obj["play_mode"] = picojson::value(state.play_mode);
   obj["brightness"] = picojson::value(static_cast<double>(state.brightness));
+  obj["compose_bg_color"] = picojson::value(state.compose_bg_color);
 
   file << picojson::value(obj).serialize() << "\n";
   return file.good();

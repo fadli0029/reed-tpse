@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "panel.hpp"
 #include "protocol.hpp"
 
 namespace reed {
@@ -21,7 +22,7 @@ struct DeviceInfo {
 struct ScreenConfig {
   std::vector<std::string> media;
   std::string screen_mode = "Full Screen";
-  std::string ratio = "2:1";
+  std::string ratio = panel::kDeviceJsonRatio;
   std::string play_mode = "Single";
 };
 

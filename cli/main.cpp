@@ -10,6 +10,7 @@
 #include "reed/config.hpp"
 #include "reed/device.hpp"
 #include "reed/media.hpp"
+#include "reed/panel.hpp"
 
 namespace fs = std::filesystem;
 
@@ -39,10 +40,79 @@ static void print_usage(const char* prog) {
          "  -p, --port <path>       Serial port (auto-detected if not "
          "specified)\n"
          "  -v, --verbose           Verbose output\n"
-         "  --ratio <2:1|1:1>       Display ratio (default: 2:1)\n"
+         "  --ratio <2:1|1:1>       Display ratio in device JSON (default: "
+         +
+         std::string(reed::panel::kDeviceJsonRatio) + ")\n"
          "  --brightness <0-100>    Set brightness with display command\n"
          "  --keepalive             Stay running with keepalive (default: exit)\n"
          "  --foreground            Run daemon in foreground\n";
+}
+
+static bool restore_display_state(reed::Device& device,
+                                  const reed::DisplayState& state) {
+  reed::ScreenConfig screen_config;
+  screen_config.media = state.media;
+  screen_config.ratio = state.ratio;
+  screen_config.screen_mode = state.screen_mode;
+  screen_config.play_mode = state.play_mode;
+
+  auto config_response = device.set_screen_config(screen_config);
+  auto brightness_response = device.set_brightness(state.brightness);
+  return config_response.has_value() && brightness_response.has_value();
+}
+
+static void run_keepalive_loop(reed::Device& device,
+                               const reed::DisplayState& state,
+                               const std::string& port, int keepalive_interval,
+                               bool verbose) {
+  int consecutive_failures = 0;
+  constexpr int kFailuresBeforeReconnect = 3;
+
+  while (g_running) {
+    std::this_thread::sleep_for(std::chrono::seconds(keepalive_interval));
+    if (!g_running) break;
+
+    auto handshake = device.handshake();
+    if (handshake) {
+      consecutive_failures = 0;
+      if (verbose) {
+        std::cout << "keepalive ok\n";
+      }
+      continue;
+    }
+
+    ++consecutive_failures;
+    std::cerr << "Keepalive handshake failed (" << consecutive_failures << "/"
+              << kFailuresBeforeReconnect << ")\n";
+
+    if (consecutive_failures < kFailuresBeforeReconnect) {
+      continue;
+    }
+
+    std::cerr << "Connection appears stale. Attempting reconnect...\n";
+    device.disconnect();
+
+    if (!device.connect()) {
+      std::cerr << "Reconnect failed on " << port << "\n";
+      std::this_thread::sleep_for(std::chrono::seconds(2));
+      continue;
+    }
+
+    if (!device.handshake()) {
+      std::cerr << "Handshake failed after reconnect\n";
+      std::this_thread::sleep_for(std::chrono::seconds(2));
+      continue;
+    }
+
+    if (!restore_display_state(device, state)) {
+      std::cerr << "Failed to restore display state after reconnect\n";
+      std::this_thread::sleep_for(std::chrono::seconds(2));
+      continue;
+    }
+
+    std::cout << "Reconnected and restored display state.\n";
+    consecutive_failures = 0;
+  }
 }
 
 static int cmd_info(const std::string& port, bool verbose) {
@@ -202,14 +272,7 @@ static int cmd_display(const std::string& port,
   std::signal(SIGINT, signal_handler);
   std::signal(SIGTERM, signal_handler);
 
-  while (g_running) {
-    std::this_thread::sleep_for(std::chrono::seconds(keepalive_interval));
-    if (!g_running) break;
-    device.handshake();
-    if (verbose) {
-      std::cout << "  keepalive sent\n";
-    }
-  }
+  run_keepalive_loop(device, state, port, keepalive_interval, verbose);
 
   std::cout << "Stopping.\n";
   return 0;
@@ -315,25 +378,17 @@ static int cmd_daemon_start(const std::string& port, bool foreground,
 
   device.handshake();
 
-  reed::ScreenConfig screen_config;
-  screen_config.media = state->media;
-  screen_config.ratio = state->ratio;
-  screen_config.screen_mode = state->screen_mode;
-  screen_config.play_mode = state->play_mode;
-
-  device.set_screen_config(screen_config);
-  device.set_brightness(state->brightness);
+  if (!restore_display_state(device, *state)) {
+    std::cerr << "Failed to apply saved display state.\n";
+    return 1;
+  }
 
   std::cout << "Display restored. Running keepalive...\n";
 
   std::signal(SIGINT, signal_handler);
   std::signal(SIGTERM, signal_handler);
 
-  while (g_running) {
-    std::this_thread::sleep_for(std::chrono::seconds(keepalive_interval));
-    if (!g_running) break;
-    device.handshake();
-  }
+  run_keepalive_loop(device, *state, actual_port, keepalive_interval, verbose);
 
   return 0;
 }
@@ -368,7 +423,7 @@ int main(int argc, char* argv[]) {
 
   std::string port = config.port;
   bool verbose = false;
-  std::string ratio = "2:1";
+  std::string ratio = reed::panel::kDeviceJsonRatio;
   int brightness = config.brightness;
   bool keepalive = false;
   bool foreground = false;
