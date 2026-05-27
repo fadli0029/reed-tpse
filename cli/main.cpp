@@ -45,6 +45,24 @@ static void print_usage(const char* prog) {
          "  --foreground            Run daemon in foreground\n";
 }
 
+static std::optional<reed::DisplayState> bootstrap_display_state(
+    int brightness) {
+  auto media = reed::Adb::list_media();
+  if (!media) {
+    return std::nullopt;
+  }
+
+  reed::DisplayState state;
+  state.media = *media;
+  state.brightness = brightness;
+
+  if (!reed::ConfigManager::save_state(state)) {
+    return std::nullopt;
+  }
+
+  return state;
+}
+
 static int cmd_info(const std::string& port, bool verbose) {
   reed::Device device(port, verbose);
 
@@ -295,14 +313,22 @@ static int cmd_daemon_start(const std::string& port, bool foreground,
   }
 
   // Foreground daemon mode
+  auto config = reed::ConfigManager::load_config();
+  int default_brightness = config ? config->brightness : 75;
+
   auto state = reed::ConfigManager::load_state();
   if (!state || state->media.empty()) {
-    std::cerr
-        << "No display state saved. Run 'reed-tpse display <file>' first.\n";
-    return 1;
+    state = bootstrap_display_state(default_brightness);
+    if (!state) {
+      std::cerr << "Failed to load or save display state.\n";
+      return 1;
+    }
   }
 
-  auto config = reed::ConfigManager::load_config();
+  if (state->media.empty()) {
+    return 0;
+  }
+
   std::string actual_port =
       (config && !config->port.empty()) ? config->port : port;
   int keepalive_interval = config ? config->keepalive_interval : 10;
