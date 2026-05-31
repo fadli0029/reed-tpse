@@ -45,6 +45,56 @@ static void print_usage(const char* prog) {
          "  --foreground            Run daemon in foreground\n";
 }
 
+static std::optional<reed::DisplayState> bootstrap_display_state(
+    int brightness) {
+  auto media = reed::Adb::list_media();
+  if (!media) {
+    return std::nullopt;
+  }
+
+  reed::DisplayState state;
+  state.media = *media;
+  state.brightness = brightness;
+
+  if (!reed::ConfigManager::save_state(state)) {
+    return std::nullopt;
+  }
+
+  return state;
+}
+
+static bool apply_display_state(reed::Device& device,
+                                const reed::DisplayState& state) {
+  reed::ScreenConfig screen_config;
+  screen_config.media = state.media;
+  screen_config.ratio = state.ratio;
+  screen_config.screen_mode = state.screen_mode;
+  screen_config.play_mode = state.play_mode;
+
+  return device.set_screen_config(screen_config).has_value() &&
+         device.set_brightness(state.brightness).has_value();
+}
+
+static bool send_keepalive(reed::Device& device, bool verbose) {
+  constexpr int kHandshakeAttempts = 3;
+  constexpr auto kRetryDelay = std::chrono::milliseconds(250);
+
+  for (int attempt = 0; attempt < kHandshakeAttempts; ++attempt) {
+    if (device.handshake()) {
+      return true;
+    }
+
+    if (attempt + 1 < kHandshakeAttempts) {
+      if (verbose) {
+        std::cerr << "Keepalive missed, retrying...\n";
+      }
+      std::this_thread::sleep_for(kRetryDelay);
+    }
+  }
+
+  return false;
+}
+
 static int cmd_info(const std::string& port, bool verbose) {
   reed::Device device(port, verbose);
 
@@ -295,14 +345,22 @@ static int cmd_daemon_start(const std::string& port, bool foreground,
   }
 
   // Foreground daemon mode
+  auto config = reed::ConfigManager::load_config();
+  int default_brightness = config ? config->brightness : 75;
+
   auto state = reed::ConfigManager::load_state();
   if (!state || state->media.empty()) {
-    std::cerr
-        << "No display state saved. Run 'reed-tpse display <file>' first.\n";
-    return 1;
+    state = bootstrap_display_state(default_brightness);
+    if (!state) {
+      std::cerr << "Failed to load or save display state.\n";
+      return 1;
+    }
   }
 
-  auto config = reed::ConfigManager::load_config();
+  if (state->media.empty()) {
+    return 0;
+  }
+
   std::string actual_port =
       (config && !config->port.empty()) ? config->port : port;
   int keepalive_interval = config ? config->keepalive_interval : 10;
@@ -313,26 +371,49 @@ static int cmd_daemon_start(const std::string& port, bool foreground,
     return 1;
   }
 
-  device.handshake();
+  if (!send_keepalive(device, verbose)) {
+    std::cerr << "Failed to initialize device keepalive\n";
+    return 1;
+  }
 
-  reed::ScreenConfig screen_config;
-  screen_config.media = state->media;
-  screen_config.ratio = state->ratio;
-  screen_config.screen_mode = state->screen_mode;
-  screen_config.play_mode = state->play_mode;
-
-  device.set_screen_config(screen_config);
-  device.set_brightness(state->brightness);
+  if (!apply_display_state(device, *state)) {
+    std::cerr << "Failed to restore display state\n";
+    return 1;
+  }
 
   std::cout << "Display restored. Running keepalive...\n";
 
   std::signal(SIGINT, signal_handler);
   std::signal(SIGTERM, signal_handler);
 
+  auto next_keepalive =
+      std::chrono::steady_clock::now() + std::chrono::seconds(keepalive_interval);
+
   while (g_running) {
-    std::this_thread::sleep_for(std::chrono::seconds(keepalive_interval));
+    auto now = std::chrono::steady_clock::now();
+    if (next_keepalive > now) {
+      std::this_thread::sleep_for(next_keepalive - now);
+    }
+
     if (!g_running) break;
-    device.handshake();
+
+    now = std::chrono::steady_clock::now();
+
+    if (now >= next_keepalive) {
+      next_keepalive = now + std::chrono::seconds(keepalive_interval);
+
+      if (!send_keepalive(device, verbose)) {
+        if (verbose) {
+          std::cerr << "Keepalive failed, reconnecting display...\n";
+        }
+
+        device.disconnect();
+        if (!device.connect() || !send_keepalive(device, verbose) ||
+            !apply_display_state(device, *state)) {
+          continue;
+        }
+      }
+    }
   }
 
   return 0;
