@@ -13,6 +13,22 @@ struct PipeCloser {
     if (f) pclose(f);
   }
 };
+
+std::optional<std::string> run_shell_command(const std::string& command) {
+  std::array<char, 4096> buffer;
+  std::string result;
+
+  std::unique_ptr<FILE, PipeCloser> pipe(popen(command.c_str(), "r"));
+  if (!pipe) {
+    return std::nullopt;
+  }
+
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+
+  return result;
+}
 }  // namespace
 
 std::optional<std::string> Adb::run_command(
@@ -38,19 +54,7 @@ std::optional<std::string> Adb::run_command(
   }
   cmd += " 2>&1";
 
-  std::array<char, 4096> buffer;
-  std::string result;
-
-  std::unique_ptr<FILE, PipeCloser> pipe(popen(cmd.c_str(), "r"));
-  if (!pipe) {
-    return std::nullopt;
-  }
-
-  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-    result += buffer.data();
-  }
-
-  return result;
+  return run_shell_command(cmd);
 }
 
 bool Adb::is_device_connected() {
