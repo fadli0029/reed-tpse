@@ -1,0 +1,4 @@
+# Allow non-root read of Intel RAPL energy counters so the overlay can report
+# CPU package power without running as root. Works for AMD Zen too (same
+# kernel driver, same subsystem).
+SUBSYSTEM=="powercap", KERNEL=="intel-rapl:*", MODE="0444"
