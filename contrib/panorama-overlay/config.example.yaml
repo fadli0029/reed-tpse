@@ -1,0 +1,51 @@
+# panorama-overlay config
+# Copy to ~/.config/panorama-overlay/config.yaml (or run --init-config).
+# Regenerate anytime with: panorama_sensor_display.py --detect --init-config
+
+# --- Update loop -------------------------------------------------------------
+interval_seconds: 30
+brightness: 80          # 0-100
+
+# GPU collector: nvidia | amd | auto | none
+gpu: auto
+
+# Background image (2240x1080 PNG). null = use bundled default_background.png.
+base_image: null
+
+# TTF font path. null = auto-search DejaVuSans-Bold / Arial Bold.
+font: null
+
+# How many frames to keep on the device at once. Higher = safer race margin,
+# more USB churn. 3 is a good default.
+keep_on_device: 3
+
+# --- lm-sensors channel mapping ---------------------------------------------
+# Feature names come from `sensors -j`. Use --detect for a nicer view.
+#
+# Example for an MSI board using the nct6687 driver with a Tryx Panorama:
+#   pump:          ["fan16"]
+#   radiator_fans: ["fan1", "fan15"]
+#   cpu_fan:       ["fan2"]
+sensors:
+  pump:          []
+  radiator_fans: []
+  cpu_fan:       []
+  coolant_temp:  []    # often unavailable; Asetek pumps don't expose it
+
+  # Fallback keyword search — used only when the explicit list above is empty.
+  pump_keywords:    ["pump"]
+  fan_keywords:     ["fan"]
+  coolant_keywords: ["coolant", "water", "liquid"]
+
+# --- CPU ---------------------------------------------------------------------
+cpu:
+  # Preferred psutil sensor group for CPU temp (first match wins).
+  #   AMD Ryzen:   k10temp, zenpower
+  #   Intel:       coretemp
+  #   ARM:         cpu_thermal
+  temp_sensors: ["k10temp", "coretemp", "zenpower", "cpu_thermal"]
+
+  # RAPL energy counters (µJ). Tried in order; first readable one wins.
+  # Modern AMD Zen exposes intel-rapl:0 via the same kernel driver as Intel.
+  rapl_paths:
+    - /sys/class/powercap/intel-rapl:0/energy_uj

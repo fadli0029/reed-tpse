@@ -1,0 +1,21 @@
+[Unit]
+Description=Tryx Panorama sensor overlay (reed-tpse)
+Documentation=https://github.com/fadli0029/reed-tpse
+After=graphical-session.target network.target
+# Give reed-tpse's own keepalive daemon a chance to be up first.
+Wants=reed-tpse-daemon.service
+
+[Service]
+Type=simple
+# %h expands to the invoking user's home directory. Adjust WorkingDirectory
+# and ExecStart if you cloned reed-tpse somewhere else.
+WorkingDirectory=%h/reed-tpse/contrib/panorama-overlay
+ExecStart=/usr/bin/python3 %h/reed-tpse/contrib/panorama-overlay/panorama_sensor_display.py
+Restart=on-failure
+RestartSec=5
+# Keep stdout/stderr in the journal for `journalctl --user -u panorama-overlay -f`
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
